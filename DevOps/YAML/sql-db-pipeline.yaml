@@ -1,0 +1,50 @@
+pool:
+  name: SH-AP-CloudOps
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build_Job
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Install .NET SDK'
+      inputs:
+       version: '$(DOTNET_VERSION)'
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore SQL Database Solution'
+      inputs:
+        azureSubscription: '$(DEV_SERVICE_CONNECTION)'
+        command: 'restore'
+        projects: 'DemoSQLDBProject.sln'
+        feedsToUse: 'select'
+    - task: MSBuild@1
+      displayName: 'Build SQL Database Project'
+      inputs:
+        solution: 'DemoSQLDBProject.sqlproj'
+        msbuildArchitecture: x64
+        platform: AnyCPU
+        configuration: release
+        msbuildArguments: '/p:OutDir=$(Build.ArtifactStagingDirectory)/DACPAC_$(Build.BuildId)'
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish SQL DACPAC -> Azure Arifact'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/DACPAC_$(Build.BuildId)'
+        ArtifactName: 'DACPAC_$(Build.BuildId)'
+
+- stage: Deploy_Dev
+  displayName: "Deploy to Dev"
+  dependsOn: Build
+  jobs:
+  - deployment: DeployToDev
+    displayName: "Deploy to Dev"
+    environment: "DEV"
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - script: |
+             cd $(Pipeline.Workspace)/DACPAC_$(Build.BuildId)
+             SqlPackage.exe /Action:Publish /SourceFile:"$(Pipeline.Workspace)/DACPAC_$(Build.BuildId)/DemoSQLDBProject.dacpac" /TargetConnectionString:"$(DEV_DB_CONNECTION_STRING)"
+
+            workingDirectory: '$(Agent.ToolsDirectory)/dotnet'
+            displayName: 'Publish SQL DACPAC'

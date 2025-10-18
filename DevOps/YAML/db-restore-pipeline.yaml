@@ -1,0 +1,76 @@
+pool:
+  name: SH-AP-CloudOps
+
+parameters:
+- name: restoreBacpac
+  displayName: "Enter Backup File name"
+  type: string
+  default: ""
+
+stages:
+- stage: DB_Restore
+  displayName: "Restore DB from Backup"
+  jobs:
+  - job: Restore_Job
+    displayName: "Restore Database from Blob"
+    steps:
+    - checkout: none
+
+    - powershell: |
+        $restoreBacpac = "${{ parameters.restoreBacpac }}"
+        if (-not $restoreBacpac) {
+          Write-Error "You must provide a valid BACPAC!"
+          exit 1
+        }
+
+        $backupDir = "$(Pipeline.Workspace)/restore_$(Build.BuildId)"
+        if (!(Test-Path $backupDir)) {
+            New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+            Write-Host "Created restore directory: $backupDir"
+        }
+      displayName: "Create Restore Directory"
+
+    - task: AzurePowerShell@5
+      displayName: "Download BACPAC from Storage"
+      inputs:
+        azureSubscription: '$(DEV_SERVICE_CONNECTION)'
+        ScriptType: InlineScript
+        Inline: |
+          $storageAccountName = "$(DEV_SA_NAME)"
+          $storageAccountKey  = "$(DEV_SA_ACCESS_KEY)"
+          $containerName      = "db-backup"
+          $blobName           = "${{ parameters.restoreBacpac }}"
+          $downloadPath       = "$(Pipeline.Workspace)/restore_$(Build.BuildId)/$blobName"
+
+          Write-Host "Attempting to download blob: $blobName"
+
+          $ctx = New-AzStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $storageAccountKey
+          Get-AzStorageBlobContent -Blob $blobName -Container $containerName -Destination $downloadPath -Context $ctx -Force
+
+          if (!(Test-Path $downloadPath)) {
+              Write-Error "Backup file not found in blob storage: $blobName"
+              exit 1
+          } else {
+              Write-Host "Successfully downloaded $blobName to $downloadPath"
+          }
+        azurePowerShellVersion: LatestVersion
+        pwsh: true
+
+    - script: |
+        cd $(Pipeline.Workspace)/restore_$(Build.BuildId)
+
+        SqlPackage.exe /Action:Import /SourceFile:"${{ parameters.restoreBacpac }}" /TargetConnectionString:"$(RESTORE_DB_CONNECTION_STRING)" /p:CommandTimeout=1200 /Diagnostics:true
+
+        echo "Database restore completed successfully!"
+      workingDirectory: '$(Agent.ToolsDirectory)/dotnet'
+      displayName: "Restore SQL Database (Import BACPAC)"
+
+    - powershell: |
+        $restoreDir = "$(Pipeline.Workspace)/restore_$(Build.BuildId)"
+        if (Test-Path $restoreDir) {
+            Write-Host "Cleaning up restore directory..."
+            Remove-Item -Path $restoreDir -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "Deleted restore directory: $restoreDir"
+        }
+      displayName: "Cleanup Restore Directory"
+      condition: always()

@@ -1,0 +1,62 @@
+pool:
+  name: SH-AP-CloudOps
+
+stages:
+- stage: DB_Backup
+  jobs:
+  - job: BACPAC_Job
+    steps:
+    - checkout: none
+    
+    - powershell: |
+       $backupDir = "$(Pipeline.Workspace)/backups_$(Build.BuildId)"
+       if (!(Test-Path $backupDir)) {
+           New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+           Write-Host "Created backup directory: $backupDir"
+       }
+      displayName: 'Create Backup Directory'
+
+    - script: |
+       cd $(Pipeline.Workspace)/backups_$(Build.BuildId)
+       SqlPackage.exe /Action:Export /TargetFile:"Demo_SQL_DB_$(Build.BuildId).bacpac" /SourceConnectionString:"$(BACKUP_DB_CONNECTION_STRING)" /p:CommandTimeout=1200 /Diagnostics:true
+
+       cd $(Pipeline.Workspace)/backups_$(Build.BuildId)
+       dir
+   
+      workingDirectory: '$(Agent.ToolsDirectory)/dotnet'
+      displayName: 'Export SQL BACPAC'
+
+    - task: AzurePowerShell@5
+      displayName: "Upload DB Backup to Storage Account"
+      inputs:
+        azureSubscription: '$(DEV_SERVICE_CONNECTION)'
+        ScriptType: "InlineScript"
+        Inline: |
+          $storageAccountName = "$(DEV_SA_NAME)"
+          $storageAccountKey  = "$(DEV_SA_ACCESS_KEY)"
+          $containerName      = "db-backup"
+          $blobName           = "Demo_SQL_DB_$(Build.BuildId).bacpac"
+          $filePath           = "$(Pipeline.Workspace)/backups_$(Build.BuildId)/Demo_SQL_DB_$(Build.BuildId).bacpac"
+
+          # Create storage context
+          $ctx = New-AzStorageContext -StorageAccountName $storageAccountName -StorageAccountKey $storageAccountKey
+
+          # Upload backup to storage
+          Set-AzStorageBlobContent -Context $ctx -Container $containerName -Blob $blobName -File $filePath -Force
+
+          Write-Host "Uploaded $blobName to container $containerName"
+        azurePowerShellVersion: "LatestVersion"
+        pwsh: true
+
+    - powershell: |
+        $backupDir = "$(Pipeline.Workspace)/backups_$(Build.BuildId)"
+        if (Test-Path $backupDir) {
+            Write-Host "Cleaning up contents in $backupDir..."
+            Get-ChildItem -Path $backupDir -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -Path $backupDir -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "Deleted backup directory and its contents: $backupDir"
+        } else {
+            Write-Host "No backup directory found to delete."
+        }
+      displayName: 'Cleanup Backup Directory'
+      condition: always()
