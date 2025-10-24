@@ -32,8 +32,8 @@ stages:
         azureSubscription: '$(DEV_SERVICE_CONNECTION)'
         ScriptType: "InlineScript"
         Inline: |
-          $storageAccountName = "$(DEV_SA_NAME)"
-          $storageAccountKey  = "$(DEV_SA_ACCESS_KEY)"
+          $storageAccountName = "$(SA_NAME)"
+          $storageAccountKey  = "$(SA_ACCESS_KEY)"
           $containerName      = "db-backup"
           $blobName           = "Demo_SQL_DB_$(Build.BuildId).bacpac"
           $filePath           = "$(Pipeline.Workspace)/backups_$(Build.BuildId)/Demo_SQL_DB_$(Build.BuildId).bacpac"
@@ -59,4 +59,5 @@ stages:
             Write-Host "No backup directory found to delete."
         }
       displayName: 'Cleanup Backup Directory'
+
       condition: always()
