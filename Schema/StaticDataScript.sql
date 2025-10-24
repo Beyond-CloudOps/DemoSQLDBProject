@@ -14,9 +14,9 @@ WHEN NOT MATCHED BY TARGET THEN
 
 MERGE [dbo].[ProjectDetails] AS target
 USING (VALUES 
-    (1, 'Verisma MRR', 'Medical Record Request Automation', 'Prajitha'),
-    (2, 'DataSync', 'Automated Data Synchronization Service', 'Jayakumar'),
-    (3, 'OpenReplay POC', 'Frontend Session Replay Integration', 'Ranish')
+    (1, 'CloudOps', 'Created for Beyond CloudOps Demos', 'Jacobs Matthews'),
+    (2, 'DataSync', 'Automated Data Synchronization Service', 'Wilson Warner'),
+    (3, 'OpenReplay POC', 'Frontend Session Replay Integration', 'Tina George')
 ) AS source ([Id], [ProjectName], [ProjectDescription], [CreatedBy])
 ON target.[Id] = source.[Id]
 WHEN NOT MATCHED BY TARGET THEN
