@@ -36,8 +36,8 @@ stages:
         azureSubscription: '$(DEV_SERVICE_CONNECTION)'
         ScriptType: InlineScript
         Inline: |
-          $storageAccountName = "$(DEV_SA_NAME)"
-          $storageAccountKey  = "$(DEV_SA_ACCESS_KEY)"
+          $storageAccountName = "$(SA_NAME)"
+          $storageAccountKey  = "$(SA_ACCESS_KEY)"
           $containerName      = "db-backup"
           $blobName           = "${{ parameters.restoreBacpac }}"
           $downloadPath       = "$(Pipeline.Workspace)/restore_$(Build.BuildId)/$blobName"
@@ -73,4 +73,5 @@ stages:
             Write-Host "Deleted restore directory: $restoreDir"
         }
       displayName: "Cleanup Restore Directory"
+
       condition: always()
