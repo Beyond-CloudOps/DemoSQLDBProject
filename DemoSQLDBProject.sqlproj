@@ -61,7 +61,7 @@
     <Folder Include="Schema\Stored Procedures" />
   </ItemGroup>
   <ItemGroup>
-    <PostDeploy Include="Schema\SeederScript.sql" />
+    <PostDeploy Include="Schema\StaticDataScript.sql" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="Schema\Tables\ReleaseVersion.sql" />
